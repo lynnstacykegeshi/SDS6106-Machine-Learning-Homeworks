@@ -1,0 +1,123 @@
+---
+title: "SVM vs Clustering"
+author: "Lynnstacy Kegeshi"
+date: "2025-03-31"
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)  # Data manipulation and visualization (ggplot2, dplyr, etc.)
+library(cluster)    # Clustering algorithms like K-Means and hierarchical clustering
+library(e1071) # SVM
+
+```
+
+
+```{r, readcsv}
+hotel_bookings_data<- read.csv("hotel_bookings.csv")
+```
+
+
+```{r, glimpse}
+glimpse(hotel_bookings_data)
+```
+
+
+```{r}
+attach(hotel_bookings_data)
+```
+
+We proceed to select all numeric columns from our dataset as Kmeans  K-Means works by computing Euclidean distances.
+
+```{r, cluster}
+hotel_cluster <-  hotel_bookings_data %>% 
+  select("stays_in_weekend_nights", "stays_in_week_nights", "is_repeated_guest")
+```
+
+We check for any missing values in the dataset.
+
+```{r}
+colSums(is.na(hotel_cluster))
+```
+
+
+Drop missing values from our cluster 
+
+```{r}
+hotel_cluster <- hotel_cluster %>% drop_na()
+```
+
+Next, we create a boxplot to visualize the distribution of the numeric data. Boxplots are useful for identifying outliers, which may distort the clustering process. 
+
+```{r}
+# Check distributions and outliers
+boxplot(hotel_cluster, main = "Boxplot of Hotel Booking Features", las = 2, col="steelblue")
+```
+
+We then normalize our dataste as SVMs are sensitive to feature scaling because they compute distances (dot products, margins).
+
+```{r}
+hotel_cluster_scaled <- scale(hotel_cluster)
+
+```
+
+
+We now move on to the actual clustering. To determine the optimal number of clusters, we use the elbow method. This method involves calculating the within-cluster sum of squares (WSS) for different values of k, the number of clusters. The “elbow” point, where the decrease in WSS starts to slow down, suggests the optimal number of clusters.
+
+
+```{r}
+
+wss <- vector() 
+for (k in 1:10) {
+kmeans_model <- kmeans(hotel_cluster_scaled, centers = k, nstart = 25, iter.max = 100) 
+wss[k] <- kmeans_model$tot.withinss
+}
+
+plot(1:10, wss, type = "b", pch = 19, col = "steelblue", frame = FALSE,
+xlab = "Number of clusters K",
+ylab = "Total within-clusters sum of squares")
+```
+
+
+From the above plot, we note that the elbow point is at 3. Thus 3 clusters.
+
+We set a random seed for reproducibility and then perform the clustering with the specified number of clusters (3).
+
+```{r}
+set.seed(230) # Ensures reproducibility
+kmeans_result <- kmeans(hotel_cluster_scaled, centers = 4, nstart = 25)
+
+```
+
+Finally, we use Principal Component Analysis (PCA) to reduce the data’s dimensionality for visualization. By plotting the first two principal components, we can visually inspect the clustering results, with points colored by their respective clusters. This provides an intuitive view of how well the hotel bookings are grouped.
+
+```{r}
+
+# Perform PCA on scaled data
+pca <- prcomp(hotel_cluster_scaled, scale = TRUE) 
+
+# Create data frame with first two PCs and clusters
+pca_data <- data.frame(
+  PC1 = pca$x[,1],  # First principal component
+  PC2 = pca$x[,2],  # Second principal component
+  Cluster = factor(kmeans_result$cluster)  # Cluster labels from K-means
+)
+
+# Create visualization plot
+ggplot(pca_data, aes(x = PC1, y = PC2, color = Cluster)) +
+  geom_point(alpha = 0.6, size = 1.5) +
+  labs(title = "Hotel Booking Clusters in PCA Space",
+       x = "First Principal Component (PC1)",
+       y = "Second Principal Component (PC2)",
+       color = "Cluster Group") +
+  theme_minimal() 
+```
